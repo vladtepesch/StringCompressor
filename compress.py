@@ -124,7 +124,6 @@ syms = sorted(syms, key = lambda x: x[1]['n'], reverse=True)
 print("syms: ", syms)
 print("sum: ", weight)
 
-#x.bit_length()    
 
 top = {
     'id':0,
@@ -142,7 +141,6 @@ gStr = ''
 
 symbolTable = {}
 
-decompressData = []
 def extendList(l, n, pad=0):
     if len(l) < n:
         l.extend([pad] * (n - len(l)))
@@ -173,7 +171,6 @@ while (len(stack) > 0):
     i['aleaf'] = len(a['syms'])<=1
     i['b'] = b
     i['bleaf'] = len(b['syms'])<=1
-    #i['refId'] = str(i['id'])+'_' + ('1' if i['bleaf'] else '0') + ('1' if i['aleaf'] else '0')
     i['refId'] =  i['id'] | (0x80 if i['bleaf'] else 0) | (0x40 if i['aleaf'] else 0)
     if not i['aleaf']:
         a['name'] = 'N'+str(noN)
@@ -194,32 +191,27 @@ while (len(stack) > 0):
         b['name'] = '[' + b['syms'][0][0] + ']'
         symbolTable[ b['syms'][0][0]] = b
         
-    #aLinkId = 
     nodes[a['name']] = a
     nodes[b['name']] = b
 
-    extendList(decompressData, i['id']+1, [])
-    #decompressData[i['id'] ] = [ b['id'] if not i['bleaf'] else '[' + b['syms'][0][0] + ']', 
-    #                             a['id'] if not i['aleaf'] else '[' + a['syms'][0][0] + ']' ]
-    decompressData[i['id'] ] = [b['name'], a['name']]
     gStr = gStr +  '"' + ba2str(i['code']) +'\\n'+ i['name'] + '" -> "'  + ba2str(a['code']) +'\\n'+ a['name'] + '"' + ";\n"
     gStr = gStr +  '"' + ba2str(i['code']) +'\\n'+ i['name'] + '" -> "'  + ba2str(b['code']) +'\\n'+ b['name'] + '"' + ";\n"
 
- #   sys.exit()
 
 print(gStr)
 pprint.pprint(symbolTable)
 #pprint.pprint(decompressData)
-#
-decompressData2 = []
+
+decompressData = []
 for ni in nodes.items():
     i = ni[1]
     if 'id' in i:
-        extendList(decompressData2, i['id']+1, [])
-        decompressData2[i['id'] ] = [i['b']['refId'] if 'refId' in i['b'] else (ord(i['b']['syms'][0][0]) if i['b']['syms'][0][0] != 'rest' else 255), 
+        extendList(decompressData, i['id']+1, [])
+        decompressData[i['id'] ] = [i['b']['refId'] if 'refId' in i['b'] else (ord(i['b']['syms'][0][0]) if i['b']['syms'][0][0] != 'rest' else 255), 
                                      i['a']['refId'] if 'refId' in i['a'] else (ord(i['a']['syms'][0][0]) if i['a']['syms'][0][0] != 'rest' else 255) ]
 
-print(pprint.pformat(decompressData2).replace('[', '{').replace(']', '}'))
+print(pprint.pformat(decompressData).replace('[', '{').replace(']', '}'))
+
 
 
 ## compress
@@ -237,6 +229,7 @@ for c in strData:
 #print(compressedDbgStr)
 print(ba2str(compressed))
 print("length: ", len(compressed))
+
 # add 1 start bit and right align with padded 0 at front (and throw this away in decoder)
 # --> we always end at byte boundaries so there is no ambiguity in decoder when to stop
 compressed.insert(0, 1)
@@ -246,7 +239,7 @@ if len(compressed)%8 != 0:
 
 
 
-decompDataSize = len(decompressData2) * 2
+decompDataSize = len(decompressData) * 2
 
 print("compressed: ", math.ceil(len(compressed)/8),'Bytes (',len(compressed), 'bits) of ',len(strData) , 'Bytes -->', round(100/8 * len(compressed)/len(strData),2), '%')
 print("incl decomp data (",decompDataSize,"B): ", math.ceil(decompDataSize + len(compressed)/8),'Bytes (',decompDataSize * 8 + len(compressed), 'bits) of ',len(strData) , 'Bytes -->', round(100/8 * (len(compressed)+decompDataSize*8)/len(strData),2), '%')
@@ -258,7 +251,6 @@ print(list(compressed.tobytes()))
 
 
 ##  decompress
-decompressData  = decompressData2
 compressedStream = compressed
 decompressed = ''
 
@@ -296,38 +288,11 @@ while len(compressedStream) > 0:
             s = nId & 0x3F
 #            print("  nextNodeId: ", s, " " ,nextIsEnd )
 
-    
-  #  sys.exit()
 
 print(decompressed)
 print(decompressed == strDataOrg)
 
-##
 
-
-
-#
-# [[2, 1],          [['2_00', '1_00'],
-#  [146, 209],       ['18_10', '17_11'],
-#  [4, 3],           ['4_00', '3_00'],
-#  [142, 141],       ['14_10', '13_10'],
-#  [6, 5],           ['6_00', '5_00'],
-#  [204, 203],       ['12_11', '11_11'],
-#  [136, 135],       ['8_10', '7_10'],
-#  [100, 202],       ['[d]', '10_11'],
-#  [118, 201],       ['[v]', '9_11'],
-#  [99, 102],        ['[c]', '[f]'],
-#  [109, 104],       ['[m]', '[h]'],
-#  [108, 121],       ['[l]', '[y]'],
-#  [103, 114],       ['[g]', '[r]'],
-#  [115, 208],       ['[s]', '16_11'],
-#  [98, 207],        ['[b]', '15_11'],
-#  [117, 111],       ['[u]', '[o]'],
-#  [105, 116],       ['[i]', '[t]'],
-#  [255, 32],        ['[rest]', '[ ]'],
-#  [97, 211],        ['[a]', '19_11'],
-#  [110, 101]]       ['[n]', '[e]']]
-# 
 
 
 
