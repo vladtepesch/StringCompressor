@@ -1,6 +1,13 @@
 from functools import reduce
+from bitarray import bitarray
+from bitarray.util import ba2base
+from bitarray.util import ba2int
 import pprint
 import math
+
+
+def ba2str(ba):
+  return ba2base(2, ba)
 
 strDataOrg = r'''The bytes type in Python is immutable and stores a sequence of values 
       ranging from 0-255 (8-bits). You can get the value of a single 
@@ -76,7 +83,7 @@ TD           stops the automatic sending of measurement values
                and resets the selection what to send
 '''
 
-maxTree = 60
+maxTree = 20
 
 hist = {}
 
@@ -125,7 +132,7 @@ top = {
     'P':None,
     'syms': syms,
     'w': weight,
-    'code':''
+    'code':bitarray()
 }
 nodes = {top['name']:top}
 
@@ -153,14 +160,14 @@ while (len(stack) > 0):
         'P':i['name'],
         'w': spS,
         'syms':i['syms'][:sp],
-        'code':i['code']+'1',
+        'code':i['code']+bitarray('1'),
     }
     b = {
         'P':i['name'],
         'r':False,
         'w': i['w']-spS,
         'syms':i['syms'][sp:],
-        'code':i['code']+'0',
+        'code':i['code']+bitarray('0'),
     }
     i['a'] = a
     i['aleaf'] = len(a['syms'])<=1
@@ -195,8 +202,8 @@ while (len(stack) > 0):
     #decompressData[i['id'] ] = [ b['id'] if not i['bleaf'] else '[' + b['syms'][0][0] + ']', 
     #                             a['id'] if not i['aleaf'] else '[' + a['syms'][0][0] + ']' ]
     decompressData[i['id'] ] = [b['name'], a['name']]
-    gStr = gStr +  '"' + i['code'] +'\\n'+ i['name'] + '" -> "'  + a['code'] +'\\n'+ a['name'] + '"' + ";\n"
-    gStr = gStr +  '"' + i['code'] +'\\n'+ i['name'] + '" -> "'  + b['code'] +'\\n'+ b['name'] + '"' + ";\n"
+    gStr = gStr +  '"' + ba2str(i['code']) +'\\n'+ i['name'] + '" -> "'  + ba2str(a['code']) +'\\n'+ a['name'] + '"' + ";\n"
+    gStr = gStr +  '"' + ba2str(i['code']) +'\\n'+ i['name'] + '" -> "'  + ba2str(b['code']) +'\\n'+ b['name'] + '"' + ";\n"
 
  #   sys.exit()
 
@@ -216,42 +223,39 @@ print(pprint.pformat(decompressData2).replace('[', '{').replace(']', '}'))
 
 
 ## compress
-compressed = ''
+
+compressed = bitarray()
+#compressedDbgStr = ''
 for c in strData:
     if chr(c) in symbolTable:
+#        compressedDbgStr = compressedDbgStr + ' ' + ba2str(symbolTable[chr(c)]['code'])
         compressed = compressed + ' ' + symbolTable[chr(c)]['code']
     else:
-        compressed = compressed + ' ' + symbolTable['rest']['code'] + '_' + "{0:08b}".format(c)
+#        compressedDbgStr = compressedDbgStr + ' ' + ba2str(symbolTable['rest']['code']) + '_' + "{0:08b}".format(c)
+        compressed = compressed + ' ' + symbolTable['rest']['code'] + '_' + bitarray("{0:08b}".format(c))
 
-print(compressed)
-compressed = compressed.replace('_', '').replace(' ', '')
-
+#print(compressedDbgStr)
+print(ba2str(compressed))
+print("length: ", len(compressed))
 # add 1 start bit and right align with padded 0 at front (and throw this away in decoder)
-# --> we always end at byte boundaries so there is no ambiguity in decoder
-compressed = '1' + compressed
+# --> we always end at byte boundaries so there is no ambiguity in decoder when to stop
+compressed.insert(0, 1)
 if len(compressed)%8 != 0:
-  compressed =  (8-len(compressed)%8)*'0'  + compressed
+  compressed = bitarray('0') * (8-len(compressed)%8)  + compressed
 ##
 
 
 
 decompDataSize = len(decompressData2) * 2
 
-print("cleaned: ", math.ceil(len(compressed)/8),'Bytes (',len(compressed), 'bits) of ',len(strData) , 'Bytes -->', round(100/8 * len(compressed)/len(strData),2), '%')
-print("incl decomp data: ", math.ceil(decompDataSize + len(compressed)/8),'Bytes (',decompDataSize * 8 + len(compressed), 'bits) of ',len(strData) , 'Bytes -->', round(100/8 * (len(compressed)+decompDataSize*8)/len(strData),2), '%')
-print(compressed)
+print("compressed: ", math.ceil(len(compressed)/8),'Bytes (',len(compressed), 'bits) of ',len(strData) , 'Bytes -->', round(100/8 * len(compressed)/len(strData),2), '%')
+print("incl decomp data (",decompDataSize,"B): ", math.ceil(decompDataSize + len(compressed)/8),'Bytes (',decompDataSize * 8 + len(compressed), 'bits) of ',len(strData) , 'Bytes -->', round(100/8 * (len(compressed)+decompDataSize*8)/len(strData),2), '%')
+#print(compressed)
 #pprint.pprint(top)
 
+# output bitarray as byte array
+print(list(compressed.tobytes()))
 
-compressedBin = []
-compressedStream = compressed
-while len(compressedStream) > 0:
-    ch = compressedStream[0:8]
-    ch = ch.ljust(8, '0')
-    compressedStream = compressedStream[8:]
-    compressedBin.append(int(ch,2))
-
-print(compressedBin)
 
 ##  decompress
 decompressData  = decompressData2
@@ -259,9 +263,8 @@ compressedStream = compressed
 decompressed = ''
 
 # throw away padded 0
-while compressedStream[0] != '1':
+while compressedStream[0] != 1:
   compressedStream = compressedStream[1:]
-
 # throw away start bit
 compressedStream = compressedStream[1:]
 
@@ -271,7 +274,7 @@ while len(compressedStream) > 0:
     finishedSymbol = False
     
     while not finishedSymbol:
-        bit = 0 if compressedStream[0]=='0' else 1
+        bit = compressedStream[0]
 #        print("next bit: ", bit)
         compressedStream = compressedStream[1:]
         nId = decompressData[s][bit]
@@ -281,7 +284,7 @@ while len(compressedStream) > 0:
 #                print("    rest - reading addional bits ")
                 ch = compressedStream[0:8]
                 compressedStream = compressedStream[8:]
-                sym = chr(int(ch,2))
+                sym = chr(ba2int(ch))
             else:
                 sym = chr(nId)
 #            print("  symbol: ", ord(sym), " '", sym, "'")
@@ -296,7 +299,7 @@ while len(compressedStream) > 0:
     
   #  sys.exit()
 
-#print(decompressed)
+print(decompressed)
 print(decompressed == strDataOrg)
 
 ##
