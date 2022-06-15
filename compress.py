@@ -85,159 +85,227 @@ TD           stops the automatic sending of measurement values
 
 maxTree = 20
 
-hist = {}
-
 strData = bytes(strDataOrg, 'ascii')
 
-for c in strData:
-    if chr(c) in hist:
-        hist[chr(c)]['n'] =  hist[chr(c)]['n'] + 1
-    else:
-        hist[chr(c)] = {'n':1, 'bl':c.bit_length()}
 
-histS = sorted(hist.items(), key = lambda x: x[1]['n'], reverse=True)
-weight = reduce(lambda a,b:a+b[1]['n'], histS, 0)
+def createSortedHistogram(data):
+  hist = {}
+  for c in data:
+      if chr(c) in hist:
+          hist[chr(c)]['n'] =  hist[chr(c)]['n'] + 1
+      else:
+          hist[chr(c)] = {'n':1, 'bl':c.bit_length()}
+
+  histS = sorted(hist.items(), key = lambda x: x[1]['n'], reverse=True)
+  #weight = reduce(lambda a,b:a+b[1]['n'], histS, 0)
+  return histS
+
+
+def buildSymbolList(histS, maxTree):
+  regSyms  = histS[0:maxTree]
+  regSymsW = reduce(lambda a,b:a+b[1]['n'], regSyms, 0)
+  restSyms  = histS[maxTree:]
+  restSymsW = reduce(lambda a,b:a+b[1]['n'], restSyms, 0)
+
+  print()
+  print("reg: ", regSyms)
+  print("sum: ", regSymsW)
+
+  print("rest: ", restSyms)
+  print("sum: ", restSymsW)
+  if len(restSyms) > 0:
+      syms = regSyms + [('rest',{'n':restSymsW})]
+  else:
+      syms = regSyms
+      
+  syms = sorted(syms, key = lambda x: x[1]['n'], reverse=True)
+  symsW =  restSymsW + regSymsW
+  print("syms: ", syms)
+  print("sum: ", symsW)
+  return syms, symsW
+
+
+def extendList(l, n, pad=0):
+    if len(l) < n:
+        l.extend([pad] * (n - len(l)))
+
+def buildTree(syms, symsW):
+  top = {
+      'id':0,
+      'name':'TOP',
+      'P':None,
+      'syms': syms,
+      'w': symsW,
+      'code':bitarray()
+  }
+  nodes = {top['name']:top}
+
+  stack = [top]
+  noN = 1
+  while (len(stack) > 0):
+      i = stack.pop()
+      wh = i['w']/2
+      sp = 0
+      spS = 0
+      while spS < wh:
+          spS = spS + i['syms'][sp][1]['n']
+          sp = sp + 1
+      
+      a = {
+          'P':i['name'],
+          'w': spS,
+          'syms':i['syms'][:sp],
+          'code':i['code']+bitarray('1'),
+      }
+      b = {
+          'P':i['name'],
+          'r':False,
+          'w': i['w']-spS,
+          'syms':i['syms'][sp:],
+          'code':i['code']+bitarray('0'),
+      }
+      i['a'] = a
+      i['aleaf'] = len(a['syms'])<=1
+      i['b'] = b
+      i['bleaf'] = len(b['syms'])<=1
+      i['refId'] =  i['id'] | (0x80 if i['bleaf'] else 0) | (0x40 if i['aleaf'] else 0)
+      if not i['aleaf']:
+          a['name'] = 'N'+str(noN)
+          a['id'] = noN
+          noN = noN + 1
+          stack.append(a)
+          #print('added a: ', a)
+      else:        
+          a['name'] = '[' + a['syms'][0][0] + ']'
+      if not i['bleaf']:
+          b['name'] = 'N'+str(noN)
+          b['id'] =  noN
+          noN = noN + 1
+          stack.append(b)
+          #print('added b: ', b)
+      else:
+          b['name'] = '[' + b['syms'][0][0] + ']'
+          
+      nodes[a['name']] = a
+      nodes[b['name']] = b
+  return nodes
+
+def printDotGraph(treeNodes):
+  gStr = 'digraph G {\n'
+  for ni in treeNodes.items():
+    a = ni[1]
+    if a["P"]:
+      i = treeNodes[a["P"]]
+      gStr = gStr +  '"' + ba2str(i['code']) +'\\n'+ i['name'] + '" -> "'  + ba2str(a['code']) +'\\n'+ a['name'] + '"' + ";\n"
+  print(gStr + "\n}")
+
+
+def buildSymbolTable(treeNodes):
+  symbolTable = {}
+  for ni in treeNodes.items():
+      i = ni[1]
+      if not 'id' in i:
+          symbolTable[ i['syms'][0][0]] = i
+  return symbolTable
+
+def buildDecompressionData(treeNodes):
+  decompressData = []
+  for ni in treeNodes.items():
+      i = ni[1]
+      if 'id' in i:
+          extendList(decompressData, i['id']+1, [])
+          decompressData[i['id'] ] = [i['b']['refId'] if 'refId' in i['b'] else (ord(i['b']['syms'][0][0]) if i['b']['syms'][0][0] != 'rest' else 255), 
+                                       i['a']['refId'] if 'refId' in i['a'] else (ord(i['a']['syms'][0][0]) if i['a']['syms'][0][0] != 'rest' else 255) ]
+  return decompressData
+
+
+## compress
+def compress(symbolTable, data):
+  compressed = bitarray()
+  #compressedDbgStr = ''
+  for c in data:
+      if chr(c) in symbolTable:
+  #        compressedDbgStr = compressedDbgStr + ' ' + ba2str(symbolTable[chr(c)]['code'])
+          compressed = compressed + ' ' + symbolTable[chr(c)]['code']
+      else:
+  #        compressedDbgStr = compressedDbgStr + ' ' + ba2str(symbolTable['rest']['code']) + '_' + "{0:08b}".format(c)
+          compressed = compressed + ' ' + symbolTable['rest']['code'] + '_' + bitarray("{0:08b}".format(c))
+
+  #print(compressedDbgStr)
+  #print(ba2str(compressed))
+  #print("length: ", len(compressed))
+
+  # add 1 start bit and right align with padded 0 at front (and throw this away in decoder)
+  # --> we always end at byte boundaries so there is no ambiguity in decoder when to stop
+  compressed.insert(0, 1)
+  if len(compressed)%8 != 0:
+    compressed = bitarray('0') * (8-len(compressed)%8)  + compressed
+  
+  return compressed
+
+
+##  decompress
+def decompress (decompressData, compressed):
+  compressedStream = compressed
+  decompressed = ''
+  
+  # throw away padded 0
+  while compressedStream[0] != 1:
+    compressedStream = compressedStream[1:]
+  # throw away start bit
+  compressedStream = compressedStream[1:]
+
+  while len(compressedStream) > 0:
+      s = 0
+      nextIsEnd = [False, False]
+      finishedSymbol = False
+      
+      while not finishedSymbol:
+          bit = compressedStream[0]
+  #        print("next bit: ", bit)
+          compressedStream = compressedStream[1:]
+          nId = decompressData[s][bit]
+          if nextIsEnd[bit]:
+  #            print("  is end: ")
+              if nId==255:
+  #                print("    rest - reading addional bits ")
+                  ch = compressedStream[0:8]
+                  compressedStream = compressedStream[8:]
+                  sym = chr(ba2int(ch))
+              else:
+                  sym = chr(nId)
+  #            print("  symbol: ", ord(sym), " '", sym, "'")
+              decompressed = decompressed + sym
+              finishedSymbol = True
+          else:
+              nextIsEnd[0] = nId & 0x80 != 0
+              nextIsEnd[1] = nId & 0x40 != 0
+              s = nId & 0x3F
+  #            print("  nextNodeId: ", s, " " ,nextIsEnd )
+  return decompressed
+
+
+
+
+
+histS = createSortedHistogram(strData)
 
 for h in histS:
     print(h[0],': ', h[1] )
 
 print(len(histS), 'distinct symbols')
 
-regSyms  = histS[0:maxTree]
-regSymsW = reduce(lambda a,b:a+b[1]['n'], regSyms, 0)
-restSyms  = histS[maxTree:]
-restSymsW = reduce(lambda a,b:a+b[1]['n'], restSyms, 0)
+syms, symsW = buildSymbolList(histS, maxTree)
 
-print()
-print("reg: ", regSyms)
-print("sum: ", regSymsW)
-
-print("rest: ", restSyms)
-print("sum: ", restSymsW)
-if len(restSyms) > 0:
-    syms = regSyms + [('rest',{'n':restSymsW})]
-else:
-    syms = regSyms
-    
-syms = sorted(syms, key = lambda x: x[1]['n'], reverse=True)
-
-print("syms: ", syms)
-print("sum: ", weight)
-
-
-top = {
-    'id':0,
-    'name':'TOP',
-    'P':None,
-    'syms': syms,
-    'w': weight,
-    'code':bitarray()
-}
-nodes = {top['name']:top}
-
-stack = [top]
-
-gStr = ''
-
-symbolTable = {}
-
-def extendList(l, n, pad=0):
-    if len(l) < n:
-        l.extend([pad] * (n - len(l)))
-noN = 1
-while (len(stack) > 0):
-    i = stack.pop()
-    wh = i['w']/2
-    sp = 0
-    spS = 0
-    while spS < wh:
-        spS = spS + i['syms'][sp][1]['n']
-        sp = sp + 1
-    
-    a = {
-        'P':i['name'],
-        'w': spS,
-        'syms':i['syms'][:sp],
-        'code':i['code']+bitarray('1'),
-    }
-    b = {
-        'P':i['name'],
-        'r':False,
-        'w': i['w']-spS,
-        'syms':i['syms'][sp:],
-        'code':i['code']+bitarray('0'),
-    }
-    i['a'] = a
-    i['aleaf'] = len(a['syms'])<=1
-    i['b'] = b
-    i['bleaf'] = len(b['syms'])<=1
-    i['refId'] =  i['id'] | (0x80 if i['bleaf'] else 0) | (0x40 if i['aleaf'] else 0)
-    if not i['aleaf']:
-        a['name'] = 'N'+str(noN)
-        a['id'] = noN
-        noN = noN + 1
-        stack.append(a)
-        #print('added a: ', a)
-    else:        
-        a['name'] = '[' + a['syms'][0][0] + ']'
-        symbolTable[ a['syms'][0][0]] = a
-    if not i['bleaf']:
-        b['name'] = 'N'+str(noN)
-        b['id'] =  noN
-        noN = noN + 1
-        stack.append(b)
-        #print('added b: ', b)
-    else:
-        b['name'] = '[' + b['syms'][0][0] + ']'
-        symbolTable[ b['syms'][0][0]] = b
-        
-    nodes[a['name']] = a
-    nodes[b['name']] = b
-
-    gStr = gStr +  '"' + ba2str(i['code']) +'\\n'+ i['name'] + '" -> "'  + ba2str(a['code']) +'\\n'+ a['name'] + '"' + ";\n"
-    gStr = gStr +  '"' + ba2str(i['code']) +'\\n'+ i['name'] + '" -> "'  + ba2str(b['code']) +'\\n'+ b['name'] + '"' + ";\n"
-
-
-print(gStr)
+nodes = buildTree(syms, symsW)
+decompressData = buildDecompressionData(nodes)
+symbolTable = buildSymbolTable(nodes)
 pprint.pprint(symbolTable)
-#pprint.pprint(decompressData)
-
-decompressData = []
-for ni in nodes.items():
-    i = ni[1]
-    if 'id' in i:
-        extendList(decompressData, i['id']+1, [])
-        decompressData[i['id'] ] = [i['b']['refId'] if 'refId' in i['b'] else (ord(i['b']['syms'][0][0]) if i['b']['syms'][0][0] != 'rest' else 255), 
-                                     i['a']['refId'] if 'refId' in i['a'] else (ord(i['a']['syms'][0][0]) if i['a']['syms'][0][0] != 'rest' else 255) ]
+#printDotGraph(nodes)
 
 print(pprint.pformat(decompressData).replace('[', '{').replace(']', '}'))
 
-
-
-## compress
-
-compressed = bitarray()
-#compressedDbgStr = ''
-for c in strData:
-    if chr(c) in symbolTable:
-#        compressedDbgStr = compressedDbgStr + ' ' + ba2str(symbolTable[chr(c)]['code'])
-        compressed = compressed + ' ' + symbolTable[chr(c)]['code']
-    else:
-#        compressedDbgStr = compressedDbgStr + ' ' + ba2str(symbolTable['rest']['code']) + '_' + "{0:08b}".format(c)
-        compressed = compressed + ' ' + symbolTable['rest']['code'] + '_' + bitarray("{0:08b}".format(c))
-
-#print(compressedDbgStr)
-print(ba2str(compressed))
-print("length: ", len(compressed))
-
-# add 1 start bit and right align with padded 0 at front (and throw this away in decoder)
-# --> we always end at byte boundaries so there is no ambiguity in decoder when to stop
-compressed.insert(0, 1)
-if len(compressed)%8 != 0:
-  compressed = bitarray('0') * (8-len(compressed)%8)  + compressed
-##
-
-
+compressed = compress(symbolTable, strData)
 
 decompDataSize = len(decompressData) * 2
 
@@ -249,45 +317,7 @@ print("incl decomp data (",decompDataSize,"B): ", math.ceil(decompDataSize + len
 # output bitarray as byte array
 print(list(compressed.tobytes()))
 
-
-##  decompress
-compressedStream = compressed
-decompressed = ''
-
-# throw away padded 0
-while compressedStream[0] != 1:
-  compressedStream = compressedStream[1:]
-# throw away start bit
-compressedStream = compressedStream[1:]
-
-while len(compressedStream) > 0:
-    s = 0
-    nextIsEnd = [False, False]
-    finishedSymbol = False
-    
-    while not finishedSymbol:
-        bit = compressedStream[0]
-#        print("next bit: ", bit)
-        compressedStream = compressedStream[1:]
-        nId = decompressData[s][bit]
-        if nextIsEnd[bit]:
-#            print("  is end: ")
-            if nId==255:
-#                print("    rest - reading addional bits ")
-                ch = compressedStream[0:8]
-                compressedStream = compressedStream[8:]
-                sym = chr(ba2int(ch))
-            else:
-                sym = chr(nId)
-#            print("  symbol: ", ord(sym), " '", sym, "'")
-            decompressed = decompressed + sym
-            finishedSymbol = True
-        else:
-            nextIsEnd[0] = nId & 0x80 != 0
-            nextIsEnd[1] = nId & 0x40 != 0
-            s = nId & 0x3F
-#            print("  nextNodeId: ", s, " " ,nextIsEnd )
-
+decompressed = decompress(decompressData, compressed)
 
 print(decompressed)
 print(decompressed == strDataOrg)
