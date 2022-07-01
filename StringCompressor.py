@@ -1,3 +1,6 @@
+
+from platform import node
+from typing import overload
 from functools import reduce
 from tabnanny import verbose
 from bitarray import bitarray
@@ -9,17 +12,42 @@ import math
 
 
 def ba2str(ba):
+  """generated a binary textstring from the bitarray """
   return ba2base(2, ba)
 
 class StringCompressor:
-  def __init__(self, maxTree=20, verbose = False):
-     self.decompressionData = None
-     self.symbolTable = None
-     self.nodes = None
-     self.verbose = verbose
-     self.maxTree = maxTree
+  """Compresses string data with modified Huffman encoding that allows minimal memory footprint decoding
 
-  def train(self, strData):
+  """
+
+  def __init__(self, maxTree=20, treeShanon = False, verbose = False):
+    """creates new StringCompressor instance
+
+       To actually use it to compress something a model has to be built
+       either by calling `trainFrom*` or `loadDecompressData`
+
+    Args:
+        maxTree (int, optional): maximum nodes in the tree. Defaults to 20.
+        treeShanon (bool, optional): weather to use Shanon Fano encoding principle instead of Huffman. Defaults to False.
+        verbose (bool, optional): if true, a lot of intermediate results are output. Defaults to False.
+    """
+
+    if maxTree > 63 or maxTree < 3:
+      raise Exception("invalid parameter maxTree " + str(maxTree))
+    self.decompressionData = None
+    self.symbolTable = None
+    self.nodes = None
+    self.verbose = verbose
+    self.maxTree = maxTree
+    self.treeShanon = treeShanon
+
+  def trainFromString(self, str:str):
+    """creates the compression model from the given string"""
+    strData = bytes(str, 'ascii')
+    self.trainFromBytes(strData)
+
+  def trainFromBytes(self, strData:bytes):
+    """creates the compression model from the given bytes"""
 
     histS = StringCompressor.__createSortedHistogram(strData)
 
@@ -30,15 +58,16 @@ class StringCompressor:
 
     syms, symsW = StringCompressor.__buildSymbolList(histS, self.maxTree)
 
-    self.nodes = StringCompressor.__buildTree(syms, symsW)
-    if verbose:
+    self.nodes = self.buildTree(syms, symsW)
+    if self.verbose:
       pprint.pprint(self.nodes)
     self.decompressData = StringCompressor.__buildDecompressionData(self.nodes)
     self.symbolTable = StringCompressor.__buildSymbolTable(self.nodes)
-    if verbose:
+    if self.verbose:
       pprint.pprint(self.symbolTable)
 
   def printDotGraph(self):
+    """prints a dot graph for the trained compression model"""
     gStr = 'digraph G {\n'
     for ni in self.nodes.items():
       a = ni[1]
@@ -47,8 +76,23 @@ class StringCompressor:
         gStr = gStr +  '"' + ba2str(i['code']) +'\\n'+ i['name'] + '" -> "'  + ba2str(a['code']) +'\\n'+ a['name'] + '"' + ";\n"
     print(gStr + "\n}")
 
+  def printMermaidGraph(self):
+    """prints a mermaid graph for the trained compression model"""
+    gStr = 'graph TD \n'
+    for ni in self.nodes.items():
+      a = ni[1]
+      if a["P"]:
+        i = self.nodes[a["P"]]
+        gStr = gStr +  '    N'+ ba2str(i['code']) +  '["' + i['name'] + '<br/>' + ba2str(i['code']) +'"] --> |'  + str(a['code'][-1]) +  '| N'+ ba2str(a['code']) +  '["' + a['name'] + '<br/>' + ba2str(a['code']) +'"]' + "\n"
+    print(gStr + "\n")
+
 
   def loadDecompressData(self, decompressData):
+    """reconstructs the compression model from the decompression data bytes  
+       
+       This may be necessary if only the decompression data is available 
+       but new strings should compressed 
+    """
     nodes = {}
     nodeById = []
     for i in range(len(decompressData)):
@@ -114,9 +158,28 @@ class StringCompressor:
       pprint.pprint(self.symbolTable)
 
 
+  def compressString(self, str:str) -> bytes:
+    """compresses the given string into a bytearray using the trained/loaded model
+
+    Args:
+        str (str): the string to compress
+
+    Returns:
+        bytes: compressed data
+    """
+    strData = bytes(str, 'ascii')
+    return self.compressBytes(strData)
 
   ## compress
-  def compress(self, data):
+  def compressBytes(self, data:bytes):
+    """compresses the given data into a bytearray using the trained/loaded model
+
+    Args:
+        data (bytes): bytes to compress
+
+    Returns:
+        bytes: compressed data
+    """
     compressed = bitarray()
     #compressedDbgStr = ''
     for c in data:
@@ -137,12 +200,22 @@ class StringCompressor:
     if len(compressed)%8 != 0:
       compressed = bitarray('0') * (8-len(compressed)%8)  + compressed
     
-    return compressed
+    return compressed.tobytes()
 
 
   ##  decompress
-  def decompress (self, compressed):
-    compressedStream = compressed
+  def decompress (self, compressed : bytes) -> str:
+    """decompresses the given data using the trained/loaded model
+
+    Args:
+        compressed (bytes): the bytes to decompress
+
+
+    Returns:
+        str: the decompressed string
+    """
+    compressedStream = bitarray()
+    compressedStream.frombytes(compressed)
     decompressed = ''
     
     # throw away padded 0
@@ -181,7 +254,8 @@ class StringCompressor:
     return decompressed
 
 
-  def __createSortedHistogram(data):
+  def __createSortedHistogram(data:bytes):
+    """builds a histogram of the input data and returns a sorted list of (symb, {n, bl}) tupel"""
     hist = {}
     for c in data:
         if chr(c) in hist:
@@ -222,7 +296,99 @@ class StringCompressor:
       if len(l) < n:
           l.extend([pad] * (n - len(l)))
 
-  def __buildTree(syms, symsW):
+  def buildTree(self, syms, symsW):
+    if self.treeShanon:
+      return self.__buildTreeShannon(syms, symsW)
+    else :
+      return self.__buildTreeHuffman(syms, symsW)
+
+  def __buildTreeHuffman(self, syms, symsW):
+    """creates a tree based on Huffman algorithm and returns a dictionary with the nodes
+       
+       - sorting the symbol list
+       - combining the lasst 2 elements into one
+       - repeat until only one element left
+    """
+
+    nodelist = []
+    nodes = {}
+    for s in syms:
+        n = {
+            'P':None,
+            'name': '[' + s[0] + ']',
+            'w': s[1]['n'],
+            'leaf':True,
+            'syms': [s],
+        }
+        nodelist.append(n)
+        nodes[n['name']] = n
+
+
+    while len(nodelist) >= 2:
+      nodelist = sorted(nodelist, key = lambda x: x['w'], reverse=True)
+      na = nodelist[-2]
+      nb = nodelist[-1]
+      # exchange nodes to prefer more deep trees at right ide
+      # mainly to reduce effort on root->leaf correction
+      if na['leaf'] and not nb['leaf']:
+        t = na
+        na = nb
+        nb = t
+
+      nodelist = nodelist[:-2]
+      nn = {
+        'P'   : None,
+        'id'  : len(nodelist),
+        'name': 'N'+str(len(nodelist)),
+        'w'   : na['w'] + nb['w'],
+        'syms': na['syms'] + nb['syms'],
+        'leaf': False,
+        'a'   : na['name'],
+        'b'   : nb['name'],
+      }
+      if nn['id'] == 0:
+        nn['name'] = 'TOP' 
+
+      na['P'] = nn['name']
+      nb['P'] = nn['name']
+      nn['refId'] = nn['id'] | (0x80 if nb['leaf'] else 0) | (0x40 if na['leaf'] else 0)
+
+      nodelist.append(nn)
+      nodes[nn['name']] = nn
+
+    # prevent root->leaf nodes
+    top = nodes['TOP']
+    if nodes[top['b']]['leaf']:
+      if self.verbose:
+        print('had to chose suboptimal tree to prevent root leavenode')
+
+      t0 = nodes[top['b']]
+      t1 = nodes[top['a']]
+      t11 = nodes[t1['a']]
+      top['a'] = t11['name']
+      top['b'] = t1['name']
+      t11['P'] = 'TOP'
+      t0['P'] = t1['name']
+      t1['a'] = t0['name']
+      t1['refId'] = t1['refId'] | 0x40
+
+    # propagate bits through the tree
+    top['code'] = bitarray()
+    def distributeCode(node):
+      if not node['leaf']:
+        nodes[node['a']]['code'] = node['code'] + bitarray('1')
+        nodes[node['b']]['code'] = node['code'] + bitarray('0')
+        distributeCode(nodes[node['a']])
+        distributeCode(nodes[node['b']])
+    distributeCode(top)
+    return nodes
+
+  def __buildTreeShannon(self, syms, symsW):
+    """creates a tree based on Shannon Fano algorithm and returns a dictionary with the nodes
+    
+       - split the sorted (by frequency) symbol list in the middle
+       - assign each to a node and repeat until all nodes only have a single symbol
+    """
     top = {
         'id':0,
         'refId':0,
@@ -245,6 +411,18 @@ class StringCompressor:
         while spS < wh:
             spS = spS + i['syms'][sp][1]['n']
             sp = sp + 1
+        
+        if i['name'] == 'TOP':
+          if sp < 2:
+            if self.verbose:
+              print('had to chose suboptimal tree to prevent root leavenode')
+            spS = spS + i['syms'][sp][1]['n']
+            sp = 2
+          elif sp + 2 > len(i['syms']):
+            if self.verbose:
+              print('had to chose suboptimal tree to prevent root leavenode')
+            sp = sp - 1 
+            spS = spS - i['syms'][sp][1]['n']
         
         a = {
             'P':i['name'],
@@ -282,8 +460,8 @@ class StringCompressor:
             
         i['a'] = a['name']
         i['b'] = b['name']
-        nodes[a['name']] = a
         nodes[b['name']] = b
+        nodes[a['name']] = a
     return nodes
 
   def __buildSymbolTable(treeNodes):

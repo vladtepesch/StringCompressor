@@ -9,12 +9,25 @@ import math
 
 from StringCompressor import StringCompressor
 
-strDataOrg = r'''The bytes type in Python is immutable and stores a sequence of values 
+testData=[
+  {  
+     'treeSize': 5,
+     'strDataOrg' : r'''The bytes type in Python is immutable and stores a sequence of values 
       ranging from 0-255 (8-bits). You can get the value of a single 
       byte by using an index like an array, but the values can not be modified.
       '''
-
-strDataOrg = r'''
+  },
+  {  
+     'treeSize': 5,
+     'strDataOrg' : r'abaaaabaaaaabbaacXaaaaaaaaKJabbcca'
+  },  
+  {  
+     'treeSize': 5,
+     'strDataOrg' : r'abbaaaaabbaacXKJabbcca'
+  },
+  {  
+     'treeSize': 20,
+     'strDataOrg' : r'''
 Command reference:
 R!           reset
 H!           print help
@@ -82,43 +95,49 @@ TDi          sets the sampling interval for periodical digital measurements
 TD           stops the automatic sending of measurement values
                and resets the selection what to send
 '''
+  }
+]
 
-maxTree = 20
+td = testData[1]
 
-strData = bytes(strDataOrg, 'ascii')
+maxTree = td['treeSize']
 
-compressor = StringCompressor(20, True)
-compressor.train(strData)
+compressor = StringCompressor(maxTree, verbose=True, treeShanon=True)
+compressor.trainFromString(td["strDataOrg"])
 compressor.printDotGraph()
+compressor.printMermaidGraph()
 
 
 print(pprint.pformat(compressor.decompressData).replace('[', '{').replace(']', '}'))
 
 
-compressed = compressor.compress(strData)
+compressed = compressor.compressString(td["strDataOrg"])
 
 decompDataSize = len(compressor.decompressData) * 2
 
-print("compressed: ", math.ceil(len(compressed)/8),'Bytes (',len(compressed), 'bits) of ',len(strData) , 'Bytes -->', round(100/8 * len(compressed)/len(strData),2), '%')
-print("incl decomp data (",decompDataSize,"B): ", math.ceil(decompDataSize + len(compressed)/8),'Bytes (',decompDataSize * 8 + len(compressed), 'bits) of ',len(strData) , 'Bytes -->', round(100/8 * (len(compressed)+decompDataSize*8)/len(strData),2), '%')
+print("compressed: ", math.ceil(len(compressed)),'Bytes (',len(compressed)*8, 'bits) of ',len(td["strDataOrg"]) , 'Bytes -->', round(100 * len(compressed)/len(td["strDataOrg"]),2), '%')
+print("incl decomp data (",decompDataSize,"B): ", math.ceil(decompDataSize + len(compressed)),'Bytes (',decompDataSize * 8 + len(compressed)*8, 'bits) of ',len(td["strDataOrg"]) , 'Bytes -->', round(100 * (len(compressed)+decompDataSize)/len(td["strDataOrg"]),2), '%')
 #print(compressed)
 #pprint.pprint(top)
 
 # output bitarray as byte array
-print(list(compressed.tobytes()))
+print(list(compressed))
+#compressedBa = bitarray()
+#compressedBa.frombytes(compressed)
+#pprint.pprint(compressedBa)
 decompressed = compressor.decompress(compressed)
 
 print(decompressed)
-print("decompressed equals original:", decompressed == strDataOrg)
+print("decompressed equals original:", decompressed == td["strDataOrg"])
 
 compressor2 = StringCompressor()
 compressor2.loadDecompressData(compressor.decompressData)
 #pprint.pprint(reNodes)
 #printDotGraph(reNodes)
-comp2 = compressor2.compress(strData)
+comp2 = compressor2.compressString(td["strDataOrg"])
 print("compressed equals:", comp2 == compressed)
 decompressed2 = compressor2.decompress(comp2)
-print("decompressed2 equals original:", decompressed == strDataOrg)
+print("decompressed2 equals original:", decompressed == td["strDataOrg"])
 
 
 
