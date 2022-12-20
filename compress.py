@@ -12,6 +12,10 @@ from StringCompressor import StringCompressor
 testData=[
   {  
      'treeSize': 5,
+     'byteDataOrg' : bytes([0,0,0,0,1,20,1,1,255,255,50,50,50,0,0,1,20,1,255,20,1,0,0,1,50,50])
+  },
+  {  
+     'treeSize': 5,
      'strDataOrg' : r'''The bytes type in Python is immutable and stores a sequence of values 
       ranging from 0-255 (8-bits). You can get the value of a single 
       byte by using an index like an array, but the values can not be modified.
@@ -98,25 +102,34 @@ TD           stops the automatic sending of measurement values
   }
 ]
 
-td = testData[1]
+td = testData[0]
+isBinData = "byteDataOrg" in td
 
 maxTree = td['treeSize']
 
-compressor = StringCompressor(maxTree, verbose=True, treeShanon=True)
-compressor.trainFromString(td["strDataOrg"])
+compressor = StringCompressor(maxTree, verbose=True, treeShanon=False)
+if isBinData:
+  compressor.trainFromBytes(td["byteDataOrg"])
+else:
+  compressor.trainFromString(td["strDataOrg"])
 compressor.printDotGraph()
 compressor.printMermaidGraph()
 
 
 print(pprint.pformat(compressor.decompressData).replace('[', '{').replace(']', '}'))
 
+if isBinData:
+  compressed = compressor.compressBytes(td["byteDataOrg"])
+  orgLen = len(td["byteDataOrg"])
+else:
+  compressed = compressor.compressString(td["strDataOrg"])
+  orgLen = len(td["strDataOrg"])
 
-compressed = compressor.compressString(td["strDataOrg"])
-
+compLen = len(compressed)
 decompDataSize = len(compressor.decompressData) * 2
 
-print("compressed: ", math.ceil(len(compressed)),'Bytes (',len(compressed)*8, 'bits) of ',len(td["strDataOrg"]) , 'Bytes -->', round(100 * len(compressed)/len(td["strDataOrg"]),2), '%')
-print("incl decomp data (",decompDataSize,"B): ", math.ceil(decompDataSize + len(compressed)),'Bytes (',decompDataSize * 8 + len(compressed)*8, 'bits) of ',len(td["strDataOrg"]) , 'Bytes -->', round(100 * (len(compressed)+decompDataSize)/len(td["strDataOrg"]),2), '%')
+print("compressed: ", math.ceil(compLen),'Bytes (',compLen*8, 'bits) of ',orgLen , 'Bytes -->', round(100 * compLen/orgLen,2), '%')
+print("incl decomp data (",decompDataSize,"B): ", math.ceil(decompDataSize + compLen),'Bytes (',decompDataSize * 8 + compLen*8, 'bits) of ',orgLen , 'Bytes -->', round(100 * (compLen+decompDataSize)/orgLen,2), '%')
 #print(compressed)
 #pprint.pprint(top)
 
@@ -125,19 +138,30 @@ print(list(compressed))
 #compressedBa = bitarray()
 #compressedBa.frombytes(compressed)
 #pprint.pprint(compressedBa)
-decompressed = compressor.decompress(compressed)
+if isBinData:
+  decompressed = compressor.decompress(compressed)
+  print(decompressed)
+  print("decompressed equals original:", decompressed == td["byteDataOrg"])
+else:
+  decompressed = compressor.decompressString(compressed)
+  print(decompressed)
+  print("decompressed equals original:", decompressed == td["strDataOrg"])
 
-print(decompressed)
-print("decompressed equals original:", decompressed == td["strDataOrg"])
 
 compressor2 = StringCompressor()
 compressor2.loadDecompressData(compressor.decompressData)
 #pprint.pprint(reNodes)
 #printDotGraph(reNodes)
-comp2 = compressor2.compressString(td["strDataOrg"])
-print("compressed equals:", comp2 == compressed)
-decompressed2 = compressor2.decompress(comp2)
-print("decompressed2 equals original:", decompressed == td["strDataOrg"])
+if isBinData:
+  comp2 = compressor2.compressBytes(td["byteDataOrg"])
+  print("compressed equals:", comp2 == compressed)
+  decompressed2 = compressor2.decompress(comp2)
+  print("decompressed2 equals original:", decompressed == td["byteDataOrg"])
+else:
+  comp2 = compressor2.compressString(td["strDataOrg"])
+  print("compressed equals:", comp2 == compressed)
+  decompressed2 = compressor2.decompressString(comp2)
+  print("decompressed2 equals original:", decompressed == td["strDataOrg"])
 
 
 

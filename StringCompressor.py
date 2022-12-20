@@ -40,6 +40,7 @@ class StringCompressor:
     self.verbose = verbose
     self.maxTree = maxTree
     self.treeShanon = treeShanon
+    self.restSym = 255
 
   def trainFromString(self, str:str):
     """creates the compression model from the given string"""
@@ -49,20 +50,20 @@ class StringCompressor:
   def trainFromBytes(self, strData:bytes):
     """creates the compression model from the given bytes"""
 
-    histS = StringCompressor.__createSortedHistogram(strData)
+    histS = self.__createSortedHistogram(strData)
 
     if self.verbose:
       for h in histS:
           print(h[0],': ', h[1] )
       print(len(histS), 'distinct symbols')
 
-    syms, symsW = StringCompressor.__buildSymbolList(histS, self.maxTree)
+    syms, symsW = self.__buildSymbolList(histS, self.maxTree)
 
     self.nodes = self.buildTree(syms, symsW)
     if self.verbose:
       pprint.pprint(self.nodes)
-    self.decompressData = StringCompressor.__buildDecompressionData(self.nodes)
-    self.symbolTable = StringCompressor.__buildSymbolTable(self.nodes)
+    self.decompressData = self.__buildDecompressionData(self.nodes)
+    self.symbolTable = self.__buildSymbolTable(self.nodes)
     if self.verbose:
       pprint.pprint(self.symbolTable)
 
@@ -122,12 +123,12 @@ class StringCompressor:
           caleaf = (cRefId & 0x40) != 0
           if caleaf:
             ca = decompressData[cID][1]
-            aname = ('[' + chr(ca) + ']' ) if ca != 255 else 'rest'
+            aname = ('[' + chr(ca) + ']' ) if ca != self.restSym else 'rest'
             anode = {
               'P':nodeById[cID]['name'],
               'name' : aname,
               'leaf':  True,
-              'syms':  [(chr(ca), {'n':1})]  if ca != 255 else [('rest', {'n':1})],
+              'syms':  [(chr(ca), {'n':1})]  if ca != self.restSym else [('rest', {'n':1})],
               'w':1,
               'code':nodeById[cID]['code'] + bitarray('1')
             }
@@ -137,12 +138,12 @@ class StringCompressor:
           cbleaf = (cRefId & 0x80) != 0
           if cbleaf:
             cb = decompressData[cID][0]
-            bname = ('[' + chr(cb) + ']' ) if cb != 255 else 'rest'
+            bname = ('[' + chr(cb) + ']' ) if cb != self.restSym else 'rest'
             bnode = {
               'P':nodeById[cID]['name'],
               'name' : bname,
               'leaf':  True,
-              'syms':  [(chr(cb), {'n':1})]  if cb != 255 else [('rest', {'n':1})],
+              'syms':  [(chr(cb), {'n':1})]  if cb != self.restSym else [('rest', {'n':1})],
               'w':1,
               'code':nodeById[cID]['code'] + bitarray('0')
             }
@@ -152,7 +153,7 @@ class StringCompressor:
           cb = decompressData[cID][1]
     self.nodes = nodes
     self.decompressData = decompressData
-    self.symbolTable = StringCompressor.__buildSymbolTable(self.nodes)
+    self.symbolTable = self.__buildSymbolTable(self.nodes)
     self.maxTree = len(decompressData)
     if verbose:
       pprint.pprint(self.symbolTable)
@@ -171,7 +172,7 @@ class StringCompressor:
     return self.compressBytes(strData)
 
   ## compress
-  def compressBytes(self, data:bytes):
+  def compressBytes(self, data:bytes) -> bytes:
     """compresses the given data into a bytearray using the trained/loaded model
 
     Args:
@@ -202,9 +203,8 @@ class StringCompressor:
     
     return compressed.tobytes()
 
-
   ##  decompress
-  def decompress (self, compressed : bytes) -> str:
+  def decompress (self, compressed : bytes) -> bytes:
     """decompresses the given data using the trained/loaded model
 
     Args:
@@ -212,11 +212,11 @@ class StringCompressor:
 
 
     Returns:
-        str: the decompressed string
+        str: the decompressed bytes
     """
     compressedStream = bitarray()
     compressedStream.frombytes(compressed)
-    decompressed = ''
+    decompressed = bytearray()
     
     # throw away padded 0
     while compressedStream[0] != 1:
@@ -236,25 +236,38 @@ class StringCompressor:
             nId = self.decompressData[s][bit]
             if nextIsEnd[bit]:
     #            print("  is end: ")
-                if nId==255:
+                if nId==self.restSym:
     #                print("    rest - reading addional bits ")
                     ch = compressedStream[0:8]
                     compressedStream = compressedStream[8:]
-                    sym = chr(ba2int(ch))
+                    sym = ba2int(ch)
                 else:
-                    sym = chr(nId)
+                    sym = nId
     #            print("  symbol: ", ord(sym), " '", sym, "'")
-                decompressed = decompressed + sym
+                decompressed.append(sym)
                 finishedSymbol = True
             else:
                 nextIsEnd[0] = nId & 0x80 != 0
                 nextIsEnd[1] = nId & 0x40 != 0
                 s = nId & 0x3F
     #            print("  nextNodeId: ", s, " " ,nextIsEnd )
-    return decompressed
+    return bytes(decompressed)
+
+  ##  decompress
+  def decompressString (self, compressed : bytes) -> str:
+    """decompresses the given data using the trained/loaded model
+
+    Args:
+        compressed (bytes): the bytes to decompress
 
 
-  def __createSortedHistogram(data:bytes):
+    Returns:
+        str: the decompressed string
+    """
+    return self.decompress(compressed).decode('ascii')
+
+
+  def __createSortedHistogram(self, data:bytes):
     """builds a histogram of the input data and returns a sorted list of (symb, {n, bl}) tupel"""
     hist = {}
     for c in data:
@@ -268,10 +281,12 @@ class StringCompressor:
     return histS
 
 
-  def __buildSymbolList(histS, maxTree):
-    regSyms  = histS[0:maxTree]
+  def __buildSymbolList(self, histS, maxTree):
+    restSyms = list(filter(lambda x: ord(x[0][0])==self.restSym , histS))
+    histSfiltered = list(filter(lambda x: ord(x[0][0])!=self.restSym , histS))
+    regSyms  = histSfiltered[0:maxTree]
+    restSyms  = restSyms + histSfiltered[maxTree:]
     regSymsW = reduce(lambda a,b:a+b[1]['n'], regSyms, 0)
-    restSyms  = histS[maxTree:]
     restSymsW = reduce(lambda a,b:a+b[1]['n'], restSyms, 0)
 
     print()
@@ -448,7 +463,7 @@ class StringCompressor:
             stack.append(a)
             #print('added a: ', a)
         else:        
-            a['name'] = '[' + a['syms'][0][0] + ']'
+            a['name'] = (str(ord(a['syms'][0][0]))  if (a['syms'][0][0]!='rest') else '' ) + ' [' + a['syms'][0][0] + ']'
         if not b['leaf']:
             b['name'] = 'N'+str(noN)
             b['id'] =  noN
@@ -456,7 +471,7 @@ class StringCompressor:
             stack.append(b)
             #print('added b: ', b)
         else:
-            b['name'] = '[' + b['syms'][0][0] + ']'
+            b['name'] =  (str(ord(b['syms'][0][0]))  if (b['syms'][0][0]!='rest') else '' ) + ' [' + b['syms'][0][0] + ']'
             
         i['a'] = a['name']
         i['b'] = b['name']
@@ -464,7 +479,7 @@ class StringCompressor:
         nodes[a['name']] = a
     return nodes
 
-  def __buildSymbolTable(treeNodes):
+  def __buildSymbolTable(self, treeNodes):
     symbolTable = {}
     for ni in treeNodes.items():
         i = ni[1]
@@ -472,14 +487,14 @@ class StringCompressor:
             symbolTable[ i['syms'][0][0]] = i
     return symbolTable
 
-  def __buildDecompressionData(treeNodes):
+  def __buildDecompressionData(self, treeNodes):
     decompressData = []
     for ni in treeNodes.items():
         i = ni[1]
         if not i['leaf']:
             StringCompressor.__extendList(decompressData, i['id']+1, [])
-            decompressData[i['id'] ] = [treeNodes[i['b']]['refId'] if 'refId' in treeNodes[i['b']] else (ord(treeNodes[i['b']]['syms'][0][0]) if treeNodes[i['b']]['syms'][0][0] != 'rest' else 255), 
-                                        treeNodes[i['a']]['refId'] if 'refId' in treeNodes[i['a']] else (ord(treeNodes[i['a']]['syms'][0][0]) if treeNodes[i['a']]['syms'][0][0] != 'rest' else 255) ]
+            decompressData[i['id'] ] = [treeNodes[i['b']]['refId'] if 'refId' in treeNodes[i['b']] else (ord(treeNodes[i['b']]['syms'][0][0]) if treeNodes[i['b']]['syms'][0][0] != 'rest' else self.restSym), 
+                                        treeNodes[i['a']]['refId'] if 'refId' in treeNodes[i['a']] else (ord(treeNodes[i['a']]['syms'][0][0]) if treeNodes[i['a']]['syms'][0][0] != 'rest' else self.restSym) ]
     return decompressData
 
 
