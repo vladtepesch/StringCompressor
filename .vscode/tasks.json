@@ -6,8 +6,10 @@
       "command": "C:\\strawberry-perl\\c\\bin\\gcc.exe",
       "args": [
         "-fdiagnostics-color=always",
+        "-Wall", "-Wextra", "-Wpedantic",
         "-g",
-        "${file}",
+        "${fileDirname}\\**.c",
+            //"${fileDirname}\\**.h",
         "-o",
         "${fileDirname}\\${fileBasenameNoExtension}.exe"
       ],
