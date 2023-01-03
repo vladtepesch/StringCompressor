@@ -15,7 +15,7 @@ typedef struct CompressionData{
 
 
 /// function pointer for callback that outputs one decoded character
-typedef void (*CharCallback)(char);
+typedef void (*CharCallback)(char, void *);
 
 /**
  * decodes the compressed data to a output buffer
@@ -36,14 +36,16 @@ uint16_t uncompressToBuffer(const CompressionData* i_cd,
 /**
  * decodes the compressed data and calls the o_charOut callback for each decoded byte
  * 
- * @param i_cd          Meta data for compression (symbol tree)
- * @param o_charOut     callbackk thats get called for each decoded byte
- * @param i_compressed  compressed data bytes
- * @param i_cLen        length of compressed data bytes
+ * @param i_cd                 Meta data for compression (symbol tree)
+ * @param o_charOut            callback thats get called for each decoded byte
+ * @param io_callBackUserData  pointer that gets forwarded (untouched) to o_charOut callback (maybe NULL)
+ * @param i_compressed         compressed data bytes
+ * @param i_cLen               length of compressed data bytes
  * @return  number of decoded bytes
  */
 uint16_t uncompressToCB(const CompressionData* i_cd, 
                               CharCallback     o_charOut, 
+                              void*            io_callBackUserData,
                         const uint8_t*         i_compressed, 
                               uint16_t         i_cLen);
 

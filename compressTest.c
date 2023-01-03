@@ -97,8 +97,9 @@ void testBitBuffer(){
 
 }
 
-void putCharToOutput(char o){
+void putCharToOutput(char o, void* unused){
   putchar(o);
+  (void)unused;
 }
 
 int main()
@@ -112,6 +113,6 @@ int main()
   printf("uncompressed length: %d\n", oLen);
   printf(buf);
 
-  uncompressToCB(cd, &putCharToOutput, compressed, sizeof(compressed));
+  uncompressToCB(cd, &putCharToOutput, NULL, compressed, sizeof(compressed));
 
 }

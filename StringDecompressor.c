@@ -68,7 +68,11 @@ uint8_t BitBuffer_get8Bit(BitBuffer* bb){
 
 
 
-uint16_t uncompressToCB(const CompressionData* i_cd, CharCallback o_charOut, const uint8_t* i_compressed, uint16_t i_cLen )
+uint16_t uncompressToCB(const CompressionData* i_cd, 
+                              CharCallback     o_charOut, 
+                              void*           io_callBackUserData,
+                        const uint8_t*         i_compressed, 
+                              uint16_t         i_cLen)
 {
   uint16_t c = 0;
   BitBuffer bb = BitBuffer_create(i_compressed, i_cLen);
@@ -96,7 +100,7 @@ uint16_t uncompressToCB(const CompressionData* i_cd, CharCallback o_charOut, con
                 sym = nId;
             }
 //            print("  symbol: ", ord(sym), " '", sym, "'")
-            o_charOut(sym);
+            o_charOut(sym, io_callBackUserData);
             c++;
             finishedSymbol = true;
         } else {
