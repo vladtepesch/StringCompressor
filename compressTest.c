@@ -8,6 +8,29 @@
 #include "text.h"
 
 
+/* *** helper macros *** */
+
+/* turn a numeric literal into a hex constant
+(avoids problems with leading zeroes)
+8-bit constants max value 0x11111111, always fits in unsigned long
+*/
+#define HEX__(n) 0x##n##LU
+
+/* 8-bit conversion function */
+#define B8__(x)  ( (x & 0x0000000FLU) ?   1 : 0) \
+                +( (x & 0x000000F0LU) ?   2 : 0) \
+                +( (x & 0x00000F00LU) ?   4 : 0) \
+                +( (x & 0x0000F000LU) ?   8 : 0) \
+                +( (x & 0x000F0000LU) ?  16 : 0) \
+                +( (x & 0x00F00000LU) ?  32 : 0) \
+                +( (x & 0x0F000000LU) ?  64 : 0) \
+                +( (x & 0xF0000000LU) ? 128 : 0)
+
+/* *** user macros *** */
+
+/* for upto 8-bit binary constants */
+#define B8(d) ((unsigned char)B8__(HEX__(d)))
+
 
 /*
 
@@ -48,7 +71,7 @@ while len(compressedStream) > 0:
   }while(0)
 
 void testBitBuffer(){
-  const uint8_t  d[] = {0b10101100, 0b00011010, 0b11110000, 0b10101010, 0b11001100 };
+  const uint8_t  d[] = {B8(10101100), B8(00011010), B8(11110000), B8(10101010), B8(11001100) };
   const uint16_t l = sizeof(d);
   
   BitBuffer bb = BitBuffer_create(d, l);
@@ -65,10 +88,10 @@ void testBitBuffer(){
   TEST(0, b = BitBuffer_getBit(&bb)); // 1
   TEST(0, b = BitBuffer_getBit(&bb)); // 2
 
-  TEST(0b1101,     b = BitBuffer_getNBit(&bb, 4)); // 3 4 5 6
-  TEST(0b0111100,  b = BitBuffer_getNBit(&bb, 7)); // 7    0 1 2 3 4 5  // 2 
-  TEST(0b00101010, b = BitBuffer_getNBit(&bb, 8)); // 6 7  0 1 2 3 4 5  // 3
-  TEST(0b10110011, b = BitBuffer_get8Bit(&bb));    // 6 7  0 1 2 3 4 5  // 4
+  TEST(B8(1101),     b = BitBuffer_getNBit(&bb, 4)); // 3 4 5 6
+  TEST(B8(0111100),  b = BitBuffer_getNBit(&bb, 7)); // 7    0 1 2 3 4 5  // 2 
+  TEST(B8(00101010), b = BitBuffer_getNBit(&bb, 8)); // 6 7  0 1 2 3 4 5  // 3
+  TEST(B8(10110011), b = BitBuffer_get8Bit(&bb));    // 6 7  0 1 2 3 4 5  // 4
 
   uint32_t c = 0;
   while(!BitBuffer_end(&bb)){
