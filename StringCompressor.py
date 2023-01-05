@@ -288,13 +288,14 @@ class StringCompressor:
     restSyms  = restSyms + histSfiltered[maxTree:]
     regSymsW = reduce(lambda a,b:a+b[1]['n'], regSyms, 0)
     restSymsW = reduce(lambda a,b:a+b[1]['n'], restSyms, 0)
+    
+    if self.verbose:
+      print()
+      print("reg: ", regSyms)
+      print("sum: ", regSymsW)
+      print("rest: ", restSyms)
+      print("sum: ", restSymsW)
 
-    print()
-    print("reg: ", regSyms)
-    print("sum: ", regSymsW)
-
-    print("rest: ", restSyms)
-    print("sum: ", restSymsW)
     if len(restSyms) > 0:
         syms = regSyms + [('rest',{'n':restSymsW})]
     else:
@@ -302,8 +303,11 @@ class StringCompressor:
         
     syms = sorted(syms, key = lambda x: x[1]['n'], reverse=True)
     symsW =  restSymsW + regSymsW
-    print("syms: ", syms)
-    print("sum: ", symsW)
+
+    if self.verbose:
+      print("syms: ", syms)
+      print("sum: ", symsW)
+      
     return syms, symsW
 
 
