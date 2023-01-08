@@ -25,7 +25,7 @@ Decoding functionality implemented in C (and in Python for reference).
   - low decoding ram requirement
   - low decoding data overhead
 
---> so it is suitable for low grade microcontroller (e.g. AVR/Arduino)
+--> so it is suitable for low grade micro controller (e.g. AVR/Arduino)
 
 ### Non-Goals
   - maximum compression rates
@@ -40,7 +40,7 @@ Decoding functionality implemented in C (and in Python for reference).
   - very common symbols cannot be encoded as 1-bit symbol since the 'TOP'-node has no leaf-indicator bits
   - 'rest' node is slightly inefficient for normal strings, as most characters are require less than 8 bits
       - may be different 'rest' nodes 5,6,7,8 bit codes
-  - currently handling of data in program memory (harward architecture CPU) is not well supported and have to be adapted manually
+  - currently handling of data in program memory (harvard architecture CPU) is not well supported and have to be adapted manually
 
 These limitations could be solved by additional decoding data:
   - a byte that told the actual 'rest' token
@@ -50,10 +50,10 @@ These limitations could be solved by additional decoding data:
 This chapter describes the usage of this software. For background and working details see chapter [Principle](#Principle).
 
 ### Preparation/Compressing Data
-The StringCompressor library can to be used to generage decoding data and compressed data.
+The StringCompressor library can to be used to generate decoding data and compressed data.
 However `StringCompressorCli.py` can can make this a lot easier by generating a C-header based on an input file the user has to provide. 
 
-The the following code represents a minumum data file:
+The the following code represents a minimum data file:
 
     {
       'data' : [
@@ -94,7 +94,7 @@ The generated Header looks as follows:
     {11, 253, 41, 157, 41, 12, 128, 86, 11, 119, 13, 13, 121, 175, 12, 59, 190, 251,
      119, 143, 29, 134, 105, 88, 99, 131, 104, 225, 95, 118, 208, 110};
 
-Plese note that for that small texts the compression including the decoding data may be inefficient.
+Please note that for that small texts the compression including the decoding data may be inefficient.
 
 
 ### Decompressing Data
@@ -166,7 +166,7 @@ All symbols that do not have an own leaf node get the 'rest' symbol followed by 
  a  b  b  a  a  a  a  a  b  b  a  a  c   X     K            J         a  b  b  c  c  a
 11 10 10 11 11 11 11 11 10 10 11 11 01 000 001-01001011 001-01001010 11 10 10 01 01 11
 ```
-Since we require whole bytes and zeros at start or end would result in ambiguities a startbit is added at front and the whole string is right aligned with zero padding left (in this case only the start bit as the length then is a multiple of 8).
+Since we require whole bytes and zeros at start or end would result in ambiguities a start bit is added at front and the whole string is right aligned with zero padding left (in this case only the start bit as the length then is a multiple of 8).
 
 ```
 1-1110101 11111111 11010111 10100000 10100101 10010100 10101110 10010111

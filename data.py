@@ -1,5 +1,5 @@
 {
-  # global default config that can be overidden from within any compression group
+  # global default config that can be overridden from within any compression group
   # by just redefining the value within 
   # (of course not applicable for includes and file header)
   'config' : {
@@ -28,11 +28,11 @@
 
   # list of different compression groups
   # each group gets its own compression tree (decompression data)
-  # but may contain multiple independend data to compress 
+  # but may contain multiple independent data to compress 
   'data' : [
 
     # the 'name' becomes the variable name of the compression data
-    # the 'data' member contains key-value pairts where the key is the name 
+    # the 'data' member contains key-value pairs where the key is the name 
     # of the variable holding the compressed data and the value the data to compress
     # the compression data is build upon all data values in the group
     {
@@ -71,7 +71,7 @@ PWM-Control
 PE           Enables PWM (disables frequency counter)
 PD           Disables PWM
 PPv          set Prescaler of PWM clock
-               v - 2 - exponent of the prescaler that divedes the system Clock (16Mhz) 
+               v - 2 - exponent of the prescaler that divides the system Clock (16Mhz) 
                    default: 4 -> 16Mhz / 2^4 -> 1Mhz timer frequency
 PT[v]        set top of PWM timer (default 1000)
                v - the top value of the counter  [3:1023]
@@ -108,7 +108,7 @@ ARm          Selects the voltage reference for ADC
                m - 1:  VCC
                    2:  external ref  
                        < VCC   if single ended Measurement
-                       < VXX-1 if differncial Measurement
+                       < VXX-1 if differential Measurement
                    3:  1.1V
                    4:  2.56 V disconnected AREF-PIN
                    5:  2.56 V with capacitor configured to AREF-Pin
