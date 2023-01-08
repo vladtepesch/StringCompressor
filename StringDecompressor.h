@@ -27,7 +27,7 @@ typedef void (*CharCallback)(char, void *);
  * @param i_cLen        length of compressed data bytes
  * @return  number of decoded bytes
  */
-uint16_t uncompressToBuffer(const CompressionData* i_cd, 
+uint16_t decompressToBuffer(const CompressionData* i_cd, 
                                   char*            o_buf, 
                                   uint16_t         i_maxOL, 
                             const uint8_t*         i_compressed, 
@@ -43,7 +43,7 @@ uint16_t uncompressToBuffer(const CompressionData* i_cd,
  * @param i_cLen               length of compressed data bytes
  * @return  number of decoded bytes
  */
-uint16_t uncompressToCB(const CompressionData* i_cd, 
+uint16_t decompressToCB(const CompressionData* i_cd, 
                               CharCallback     o_charOut, 
                               void*            io_callBackUserData,
                         const uint8_t*         i_compressed, 

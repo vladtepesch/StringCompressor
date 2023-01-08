@@ -68,7 +68,7 @@ uint8_t BitBuffer_get8Bit(BitBuffer* bb){
 
 
 
-uint16_t uncompressToCB(const CompressionData* i_cd, 
+uint16_t decompressToCB(const CompressionData* i_cd, 
                               CharCallback     o_charOut, 
                               void*           io_callBackUserData,
                         const uint8_t*         i_compressed, 
@@ -116,7 +116,7 @@ uint16_t uncompressToCB(const CompressionData* i_cd,
   //while(p < i_)
 }
 
-uint16_t uncompressToBuffer(const CompressionData* i_cd, char* o_buf, uint16_t i_maxOL, const uint8_t* i_compressed, uint16_t i_cLen )
+uint16_t decompressToBuffer(const CompressionData* i_cd, char* o_buf, uint16_t i_maxOL, const uint8_t* i_compressed, uint16_t i_cLen )
 {
   const char* bufStart = o_buf;
   BitBuffer bb = BitBuffer_create(i_compressed, i_cLen);

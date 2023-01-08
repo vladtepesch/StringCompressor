@@ -73,7 +73,7 @@ for d in inputData['data']:
     if d['compressionStatsAsComment']:
       oLen = len(d['data'][c])
       cLen = len(cd)
-      print("\n// uncompressed: {} B, compr: {} B".format(oLen, cLen))
+      print("\n// decompressed: {} B, compr: {} B".format(oLen, cLen))
       if d['originalDataAsComment']:
         print("//")
     if d['originalDataAsComment']:

@@ -131,11 +131,11 @@ int main()
   const CompressionData* cd = &CompD;
   char buf[20000];
 
-  uint16_t oLen = uncompressToBuffer(cd, buf, 20000, compressed, sizeof(compressed));
+  uint16_t oLen = decompressToBuffer(cd, buf, 20000, compressed, sizeof(compressed));
 
-  printf("uncompressed length: %d\n", oLen);
+  printf("decompressed length: %d\n", oLen);
   printf(buf);
 
-  uncompressToCB(cd, &putCharToOutput, NULL, compressed, sizeof(compressed));
+  decompressToCB(cd, &putCharToOutput, NULL, compressed, sizeof(compressed));
 
 }

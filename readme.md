@@ -35,7 +35,7 @@ Decoding functionality implemented in C (and in Python for reference).
   - not a current but principal limitation:
     - maximal 64 nodes can be used to encode the tree.  
       If more different symbols are present in input data one node is used 
-      as 'rest' node that contains an uncompressed symbol.
+      as 'rest' node that contains an decompressed symbol.
   - binary data works in principle but is not optimal, since `0xFF` is used as 'rest' symbol that would require that each `0xFF` in the actual data (in binary data this may be more common) is encoded as 'rest'-Symbol + `0xFF`-data)
   - very common symbols cannot be encoded as 1-bit symbol since the 'TOP'-node has no leaf-indicator bits
   - 'rest' node is slightly inefficient for normal strings, as most characters are require less than 8 bits
@@ -106,21 +106,21 @@ The generated header and the `StringDecompressor.h` should be included. It provi
 
 The drawback of the first one obviously is the overhead of a lot of function calls the one of the second the need of a buffer big enough to hold the decompressed data.
 
-using `uncompressToBuffer`:
+using `decompressToBuffer`:
 
     CompressionData cd = {c_myDecompressData};
     char buf[200];
 
-    uint16_t oLen = uncompressToBuffer(&cd, buf, 200, c_myData1, sizeof(c_myData1));
+    uint16_t oLen = decompressToBuffer(&cd, buf, 200, c_myData1, sizeof(c_myData1));
 
-using `uncompressToCB`:
+using `decompressToCB`:
 
     void putCharToOutput(char o, void* unused){
       putchar(o);
       (void)unused;
     }
     // [...]
-    uncompressToCB(cd, &putCharToOutput, NULL, c_myData2, sizeof(c_myData2));
+    decompressToCB(cd, &putCharToOutput, NULL, c_myData2, sizeof(c_myData2));
 
 
 
